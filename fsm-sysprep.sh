@@ -4,8 +4,8 @@
 # Version 1.0 - Jun 2020
 # This script doesn't have validation routines for the input values used, so be careful with the information provided.
 # Howto run it:
-# - docker run -ti --rm -v $PWD:/work -w /work rolandoanton/shaman:latest ./fsm-sysprep.sh FSM_Full_Super-Worker_ESX_5.3.0_build1658.zip
-# - docker run -ti --rm -v $PWD:/work -w /work rolandoanton/shaman:latest ./fsm-sysprep.sh FSM_Full_Collector_ESX_5.3.0_build1658.zip
+# docker run -ti --rm -v $PWD:/work -w /work rolandoanton/shaman:latest ./fsm-sysprep.sh FSM_Full_Super-Worker_ESX_5.3.0_build1658.zip
+# docker run -ti --rm -v $PWD:/work -w /work rolandoanton/shaman:latest ./fsm-sysprep.sh FSM_Full_Collector_ESX_5.3.0_build1658.zip
 ##############################################################################################################################
 echo ""
 figlet -w 200 -f small FortiSIEM Sysprep
@@ -188,22 +188,8 @@ else
 		echo "[*] Cleaning up"
 		govc guest.rm -l root:ProspectHills -vm=$newname.tpl /tmp/stage01.py
 		govc guest.download -l root:ProspectHills -vm=$newname.tpl /root/vami_log.txt vami-$newname-$(date +%Y%m%d%H%M).log
+		govc guest.rm -l root:ProspectHills -vm=$newname.tpl /root/vami_log.txt		
 		sleep 5
-	}
-
-	check_off () {
-		counter=0
-		while [ $counter -lt 1 ]; do
-		check_guest=$(govc vm.info -json $newname.tpl |python3 -m json.tool|jq -r .VirtualMachines[].Runtime.PowerState 2> /dev/null |grep -c poweredOff)
-		if [ "$check_guest" -ne "0" ]; then
-        	echo "[*] VM is off"
-            let counter=counter+1
-        else
-            govc vm.power -off $newname.tpl
-			sleep 30
-		fi
-		done
-
 	}
 
 	check_sysprep_finished () {
