@@ -132,35 +132,35 @@ else
 
 	check_first_boot () {
         echo "[*] Waiting for the initial boot sequence to finish"
-		counter=0
-		while [ $counter -lt 1 ]; do
-		        firstboot=$(sshpass -p 'ProspectHills' ssh -o StrictHostKeyChecking=no -o GlobalKnownHostsFile=/dev/null -o UserKnownHostsFile=/dev/null -q root@$fsmip pgrep -f /opt/phoenix/phscripts/bin/phUpdateSystem.sh|wc -l)
-			if [ "$firstboot" -eq "0" ]; then
-                echo "[*] Firstboot scripts finished!"                               	        
-				let counter=counter+1
-				sleep 10
-            else
-                echo "[*] Firstboot scripts are still running."
-				sleep 30
-			fi
-		done
+	counter=0
+	while [ $counter -lt 1 ]; do
+		firstboot=$(sshpass -p 'ProspectHills' ssh -o StrictHostKeyChecking=no -o GlobalKnownHostsFile=/dev/null -o UserKnownHostsFile=/dev/null -q root@$fsmip pgrep -f /opt/phoenix/phscripts/bin/phUpdateSystem.sh|wc -l)
+		if [ "$firstboot" -eq "0" ]; then
+	echo "[*] Firstboot scripts finished!"                               	        
+			let counter=counter+1
+			sleep 10
+	else
+	echo "[*] Firstboot scripts are still running."
+			sleep 30
+		fi
+	done
 
 	}
 
 	remote_exec () {
-			pid=$(govc guest.start -l root:ProspectHills -vm=$newname.tpl "$@")
-			while true;
-					do
-							status=$(govc guest.ps -l root:ProspectHills -vm=$newname.tpl -json -p "$pid"|python3 -m json.tool |jq -r .ProcessInfo[].EndTime |grep -v null|wc -l)
-							if [ "$status" -ne "0" ]
-							then
-									echo "[*] Tadam! Finished!"
-									break
-							else
-									echo "[*] A minion is executing the remote tasks for us :)"
-									sleep 60
-							fi
-					done
+	pid=$(govc guest.start -l root:ProspectHills -vm=$newname.tpl "$@")
+	while true;
+	do
+		status=$(govc guest.ps -l root:ProspectHills -vm=$newname.tpl -json -p "$pid"|python3 -m json.tool |jq -r .ProcessInfo[].EndTime |grep -v null|wc -l)
+		if [ "$status" -ne "0" ]
+		then
+				echo "[*] Tadam! Finished!"
+				break
+		else
+				echo "[*] A minion is executing the remote tasks for us :)"
+				sleep 60
+		fi
+	done
 	}
 	
 	sysprep () {
@@ -180,9 +180,9 @@ else
 		govc guest.rm -l root:ProspectHills -vm=$newname.tpl /tmp/stage01.b64
 		echo "[*] Executing vami_config_net"
 		if [ $image_type == "Collector" ]; then
-            remote_exec /tmp/stage01.py -custom -ipv4ip $co_ipv4ip -ipv4netmask $co_ipv4netmask -ipv4gw $co_ipv4gw -ipv4dns $co_ipv4dns
+            		remote_exec /tmp/stage01.py -custom -ipv4ip $co_ipv4ip -ipv4netmask $co_ipv4netmask -ipv4gw $co_ipv4gw -ipv4dns $co_ipv4dns
 		elif [ $image_type == "VA" ]; then
-            remote_exec /tmp/stage01.py -custom -ipv4ip $va_ipv4ip -ipv4netmask $va_ipv4netmask -ipv4gw $va_ipv4gw -ipv4dns $va_ipv4dns
+          		remote_exec /tmp/stage01.py -custom -ipv4ip $va_ipv4ip -ipv4netmask $va_ipv4netmask -ipv4gw $va_ipv4gw -ipv4dns $va_ipv4dns
 		fi		
 		check_sysprep_finished
 		echo "[*] Cleaning up"
@@ -216,21 +216,21 @@ else
 		govc export.ovf -sha=1 -vm $newname-$timestamp .
 		echo "[*] Creating an image compatible with FortiPoC"
 	    if [ $image_type == "Collector" ]; then
-            echo "[*] Creating new OVA"
-			mv -v $newname-$timestamp/$newname-$timestamp-disk-0.vmdk system.vmdk
+            	echo "[*] Creating new OVA"
+		mv -v $newname-$timestamp/$newname-$timestamp-disk-0.vmdk system.vmdk
 	        tar -vcf FortiSIEM-$image_type-$version.$build.$timestamp.ova system.vmdk 
         	echo "[*] Cleaning up"
 	        rm -vf system.vmdk cmdb.vmdk svn.vmdk
-			rm -rvf $newname-$timestamp/
+		rm -rvf $newname-$timestamp/
 		elif [ $image_type == "VA" ]; then
 	        mv -v $newname-$timestamp/$newname-$timestamp-disk-0.vmdk system.vmdk
-			mv -v $newname-$timestamp/$newname-$timestamp-disk-1.vmdk cmdb.vmdk
-			mv -v $newname-$timestamp/$newname-$timestamp-disk-2.vmdk svn.vmdk
+		mv -v $newname-$timestamp/$newname-$timestamp-disk-1.vmdk cmdb.vmdk
+		mv -v $newname-$timestamp/$newname-$timestamp-disk-2.vmdk svn.vmdk
 	        echo "[*] Creating new OVA"
 	        tar -vcf FortiSIEM-$image_type-$version.$build.$timestamp.ova system.vmdk cmdb.vmdk svn.vmdk
         	echo "[*] Cleaning up"
 	        rm -vf system.vmdk cmdb.vmdk svn.vmdk
-            rm -rvf $newname-$timestamp/
+            	rm -rvf $newname-$timestamp/
 		fi
 		chmod 666 FortiSIEM-$image_type-$version.$build.$timestamp.ova
 		echo "[*] OVA Image Ready!: FortiSIEM-$image_type-$version.$build.$timestamp.ova"
