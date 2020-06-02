@@ -3,6 +3,9 @@
 # ranton@fortinet.com
 # Version 1.0 - Jun 2020
 # This script doesn't have validation routines for the input values used, so be careful with the information provided.
+# Howto run it:
+# - docker run -ti --rm -v $PWD:/work -w /work rolandoanton/shaman:latest ./fsm-sysprep.sh FSM_Full_Super-Worker_ESX_5.3.0_build1658.zip
+# - docker run -ti --rm -v $PWD:/work -w /work rolandoanton/shaman:latest ./fsm-sysprep.sh FSM_Full_Collector_ESX_5.3.0_build1658.zip
 ##############################################################################################################################
 echo ""
 figlet -w 200 -f small FortiSIEM Sysprep
