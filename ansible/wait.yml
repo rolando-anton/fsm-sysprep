@@ -1,0 +1,11 @@
+---
+- name: Wait for system to become reachable
+  wait_for_connection:
+    connect_timeout: "{{ wait_connect_timeout }}"
+    sleep: "{{ wait_sleep }}"
+    delay: "{{ wait_delay }}"
+    timeout: "{{ wait_timeout }}"
+  register: wait_result  
+  ignore_unreachable: yes
+  until: wait_result is not failed
+
