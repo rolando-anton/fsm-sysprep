@@ -1,0 +1,219 @@
+---
+- hosts: super
+  gather_facts: no
+  vars:
+    - vcenter_hostname: "vcsa.fortilabs.org"
+    - vcenter_username: "administrator@cloud.fortilabs.org"
+    - vcenter_password: "Nada123#"
+    - vcenter_ds: "NVMe01"
+    - vcenter_dc: "Home" 
+    - vnet: "oob-make"
+    - ova: "FortiSIEM-VA-6.2.0.0212.ova"
+    - defaultpw: "ProspectHills"
+    - newpw: "40Net123#"
+    - vmtag: "sysprep"
+    - first_login: true
+    - va_ipv4ip: "10.100.55.80"
+    - va_ipv4netmask: "255.255.255.0"
+    - va_ipv4gw: "10.100.55.254"
+    - wait_connect_timeout: 60
+    - wait_sleep: 10
+    - wait_delay: 10
+    - wait_timeout: 300
+
+  tasks:
+
+  - name: Build Supervisor VM name
+    shell: >
+      echo {{ ova }} | awk -F '.ova' {'print $1'}|sed 's/VA/Super/g'
+    register: supername
+    delegate_to: localhost
+
+  - name: Load facts
+    set_fact:
+      vmname: "{{ supername.stdout }}.{{ vmtag }}"
+
+  - name: Deploy OVF
+    community.vmware.vmware_deploy_ovf:
+      hostname: '{{ vcenter_hostname }}'
+      username: '{{ vcenter_username }}'
+      password: '{{ vcenter_password }}'
+      datacenter: "{{ vcenter_dc }}"
+      datastore: "{{ vcenter_ds }}"
+      fail_on_spec_warnings: 'yes'
+      disk_provisioning: 'thin'
+      name: "{{ vmname }}"
+      networks: "{u'NAT':u'{{ vnet }}'}"
+      validate_certs: false
+      power_on: no
+      ovf: "{{ playbook_dir }}/{{ ova }}"
+    delegate_to: localhost
+
+  - name: Add disk if Super
+    community.vmware.vmware_guest_disk:
+      hostname: "{{ vcenter_hostname }}"
+      username: "{{ vcenter_username }}"
+      password: "{{ vcenter_password }}"
+      validate_certs: false
+      datacenter: "{{ vcenter_dc }}"
+      name: "{{ vmname }}"
+      disk:
+        - size_gb: "100"
+          type: thin
+          datastore: "{{ vcenter_ds }}"
+          state: present
+          scsi_type: 'paravirtual'
+          scsi_controller: 0
+          unit_number: "1"
+        - size_gb: "60"
+          type: thin
+          datastore: "{{ vcenter_ds }}"
+          state: present
+          unit_number: "2"
+          scsi_type: 'paravirtual'
+          scsi_controller: 0
+        - size_gb: "60"
+          type: thin
+          unit_number: "3"
+          datastore: "{{ vcenter_ds }}"
+          state: present
+          scsi_controller: 0
+          scsi_type: 'paravirtual'
+    delegate_to: localhost
+    register: disk_facts
+
+
+  - name: PowerOn VM
+    community.vmware.vmware_guest:
+      hostname: "{{ vcenter_hostname }}"
+      username: "{{ vcenter_username }}"
+      password: "{{ vcenter_password }}"
+      name: "{{ vmname }}"
+      validate_certs: false
+      state: poweredon
+      wait_for_ip_address: true
+    delegate_to: localhost    
+
+  - name: "Get info"
+    community.vmware.vmware_guest_info:
+      hostname: "{{ vcenter_hostname }}"
+      username: "{{ vcenter_username }}"
+      password: "{{ vcenter_password }}"
+      datacenter: "{{ vcenter_dc }}"
+      validate_certs: false
+      name: "{{ vmname }}"
+    delegate_to: localhost
+    register: vminfo
+
+  - name: Get VM IP
+    set_fact:
+      firstip: "{{ vminfo.instance.ipv4 }}"
+
+  - name: "Changing the default password enforced during the first login"
+    expect:
+      command: sshpass -p {{ defaultpw }} ssh -o StrictHostKeyChecking=no -o GlobalKnownHostsFile=//dev//null -o UserKnownHostsFile=//dev//null root@{{ firstip  }}
+      timeout: 100
+      responses:
+        "Current password:": "{{ defaultpw }}"
+        "New password:": "{{ newpw }}"
+        "Retype new password:": "{{ newpw }}"
+    delegate_to: localhost
+    when: first_login | bool
+
+  - name: Execute Super Configuraiton
+    community.vmware.vmware_vm_shell:
+      hostname: "{{ vcenter_hostname }}"
+      username: "{{ vcenter_username }}"
+      password: "{{ vcenter_password }}"
+      datacenter: "{{ vcenter_dc }}"
+      validate_certs: false
+      vm_id: "{{ vmname }}"       
+      vm_username: root
+      vm_password: "{{ newpw }}"
+      vm_shell: "/usr/bin/python2.7"
+      vm_shell_args: "/usr/local/bin/configureFSM.py -r super -z Etc/UTC -i {{ va_ipv4ip }} -m {{ va_ipv4netmask }} -g {{ va_ipv4gw }} --host fsm-super -f fsm-super.localdomain -t 4 -d 4.2.2.2 -o install_without_fips"
+      wait_for_process: false
+      timeout: 2000
+    register: config_super
+    delegate_to: localhost
+ 
+  - include_tasks: wait.yml
+
+  - name: Wait until log file is created
+    stat:
+      path: "/usr/local/fresh-install/logs/ansible.log"
+    register: check_log
+    until: check_log.stat.exists == True
+    retries: 100
+    delay: 30
+
+  - name: "Check Configuration Progress"
+    register: check_vami
+    shell: "grep 'Fsm Tasks Summary' /usr/local/fresh-install/logs/ansible.log"
+    until: check_vami.stdout.find("Fsm Tasks Summary") != -1
+    retries: 300
+    delay: 30
+
+  - name: Print result
+    ansible.builtin.debug:
+      var: check_vami
+
+  - include_tasks: wait.yml
+
+  - name: cleanup files
+    file:
+      state: absent
+      path: "{{ item }}/"
+    loop:
+      - /fsmopt.tar.gz
+      - /svn.tar.gz
+
+  - name: Execute Sysprep
+    community.vmware.vmware_vm_shell:
+      hostname: "{{ vcenter_hostname }}"
+      username: "{{ vcenter_username }}"
+      password: "{{ vcenter_password }}"
+      datacenter: "{{ vcenter_dc }}"
+      validate_certs: false
+      vm_id: "{{ vmname }}"       
+      vm_username: root
+      vm_password: "{{ newpw }}"
+      vm_shell: "/root/zerofill.sh"
+      wait_for_process: true 
+      timeout: 2000
+    register: sysprep 
+    delegate_to: localhost
+
+  - name: Poweroff VM
+    community.vmware.vmware_guest:
+      hostname: "{{ vcenter_hostname }}"
+      username: "{{ vcenter_username }}"
+      password: "{{ vcenter_password }}"
+      name: "{{ vmname }}"
+      validate_certs: false
+      state: poweredoff
+      wait_for_ip_address: true
+    delegate_to: localhost    
+
+  - community.vmware.vmware_export_ovf:
+      hostname: '{{ vcenter_hostname }}'
+      username: '{{ vcenter_username }}'
+      password: '{{ vcenter_password }}'
+      validate_certs: false
+      name: '{{ vmname }}'
+      export_with_images: true
+      export_dir: "{{ playbook_dir }}"
+    delegate_to: localhost
+
+  - name: Repack to OVA
+    shell: |
+      mv -v {{ vmname }}/{{ vmname }}-0.vmdk os.vmdk
+      mv -v {{ vmname }}/{{ vmname }}-1.vmdk opt.vmdk
+      mv -v {{ vmname }}/{{ vmname }}-2.vmdk cmdb.vmdk
+      mv -v {{ vmname }}/{{ vmname }}-3.vmdk svn.vmdk
+      tar -vcf {{ vmname }}.ova os.vmdk opt.vmdk cmdb.vmdk svn.vmdk
+      rm -vf os.vmdk opt.vmdk cmdb.vmdk svn.vmdk
+      rm -rvf {{ vmname }}
+    register: fixovf
+    delegate_to: localhost
+
