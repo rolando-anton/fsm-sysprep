@@ -1,0 +1,10 @@
+all:
+  hosts:
+   super:
+      ansible_host: 10.100.55.80
+      ansible_user: 'root'
+      ansible_password: '40Net123#'
+   collector:
+      ansible_host: 10.100.55.81
+      ansible_user: 'root'
+      ansible_password: '40Net123#'
